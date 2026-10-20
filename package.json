@@ -1,0 +1,9 @@
+{
+  "name": "polisee-gui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test frontend/*.test.js",
+    "check": "node --check frontend/app.js && node --check frontend/bridge.js && node --check frontend/zoom.js && node --check frontend/smoke.js && node --check frontend/workflow-smoke.js && node --check frontend/segments.js && node --check frontend/group-picker.js && node --check frontend/browse-state.js && node --check frontend/ui.js && node --check frontend/diagnostics.js && node --test frontend/*.test.js"
+  }
+}
