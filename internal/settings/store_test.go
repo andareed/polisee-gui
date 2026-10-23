@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -37,7 +38,9 @@ func TestDurablePreferencesAndClear(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0077 != 0 {
+	// Windows permissions come from the user-profile ACL; Go mode bits do not
+	// represent its access control. Keep testing durability and clearing there.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
 		t.Fatal("preferences are not private")
 	}
 	if err := again.Change(func(data *Data) error { data.Remember = false; return nil }); err != nil {

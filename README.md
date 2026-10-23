@@ -36,10 +36,11 @@ uploaded. Native startup reopening is opt-in
 using **Reopen this policy on startup**. The application
 accepts UTF-8 exports up to 64 MiB.
 
-The module uses a local `replace` for `github.com/andareed/polisee-lib`; its
-`v0.0.0` requirement is a local placeholder, not a published release. A private
-GitHub repository is not required for local development. Dependencies are pinned
-in go.mod/go.sum; no global Wails CLI is needed to build or run.
+The module pins `github.com/andareed/polisee-lib v0.1.0` and uses a local
+`replace` to build against the adjacent library checkout. You need access to
+that private source for development. Downloadable releases include the compiled
+engine and do not need a library checkout. Dependencies are pinned in
+go.mod/go.sum; no global Wails CLI is needed to build or run locally.
 
 Git worktrees can use the same launcher and Makefile targets. If the worktree has
 no usable sibling library, the build resolves `polisee-lib` beside the primary
