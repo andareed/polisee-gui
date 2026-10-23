@@ -2,6 +2,11 @@ import { element, button, shown } from "./ui.js";
 
 let active = null;
 
+function diagnosticAttributes(attributes = []) {
+  const plugin = attribute => !attribute.namespace && attribute.name.toUpperCase() === "PLUGIN_NAME";
+  return [...attributes.filter(plugin), ...attributes.filter(attribute => !plugin(attribute))];
+}
+
 // These controls keep their dimensions when hidden. Revealing exported fields
 // never reflows a condition, action, or range row.
 export function metadata(label, source, { compact = false, omit = [], labelText } = {}) {
@@ -18,7 +23,7 @@ export function metadata(label, source, { compact = false, omit = [], labelText 
     control.disabled = !document.body.classList.contains("show-diagnostics");
     return control;
   }
-  const preview = (source.attributes || []).filter(attribute => !omit.includes(attribute.name)).map(attribute => `${attribute.name} ${shown(attribute.value)}`);
+  const preview = diagnosticAttributes(source.attributes).filter(attribute => !omit.includes(attribute.name)).map(attribute => `${attribute.name} ${shown(attribute.value)}`);
   if (source.text?.trim()) preview.push(source.text);
   if (!preview.length) preview.push(...(source.children || []).map(child => child.name));
   if (!preview.length) preview.push(source.name || "Exported fields");
@@ -37,7 +42,7 @@ function exportedGroup(source) {
     fields.append(pair);
   }
   if (source.namespace) add("XML namespace", source.namespace);
-  for (const attribute of source.attributes || []) add(attribute.namespace ? `{${attribute.namespace}}${attribute.name}` : attribute.name, attribute.value);
+  for (const attribute of diagnosticAttributes(source.attributes)) add(attribute.namespace ? `{${attribute.namespace}}${attribute.name}` : attribute.name, attribute.value);
   if (source.text?.trim()) add("Text", source.text);
   for (const field of source.facts || []) add(field.name, field.value);
   for (const path of source.externalExpressions || []) add("External expression unavailable", path);

@@ -188,9 +188,14 @@ func TestParityTreeTextSuggestionsAndRawMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	logic := detail.View.Logic
-	for _, text := range []string{"AND(", "CUSTOM_OPERATOR(", "CUSTOM_COMPARISON", `LOGIC="OR"`, `LEFT_PARENTHESIS="1"`, "<img src=x onerror=bad>"} {
+	for _, text := range []string{"\nAND ", "CUSTOM_OPERATOR (exported expression; not evaluated)", "CUSTOM_COMPARISON", "<img src=x onerror=bad>"} {
 		if !strings.Contains(logic.Text, text) {
 			t.Fatalf("text missing %q: %s", text, logic.Text)
+		}
+	}
+	for name, want := range map[string]string{"LOGIC": "OR", "LEFT_PARENTHESIS": "1"} {
+		if got, ok := polisee.AttributeValue(logic.Children[0].Attributes, name); !ok || got != want {
+			t.Fatalf("raw %s metadata lost: %q", name, got)
 		}
 	}
 	if logic.Notice == "" {

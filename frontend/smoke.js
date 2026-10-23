@@ -70,6 +70,21 @@ export async function verifyDetails() {
   const assert = (valid, message) => { if (!valid) throw new Error(message); };
   const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const find = id => panel.querySelector(`[data-section="${id}"]`);
+  const filterToggle = document.getElementById("filter-toggle");
+  assert(getComputedStyle(filterToggle).display !== "none", "Filters are inaccessible at this window width");
+  panel.focus();
+  const filterKey = (key, shiftKey = false) => document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true }));
+  filterKey("/");
+  assert(!document.getElementById("filter-panel").hidden, "/ does not open the filter panel");
+  for (const id of ["property-search", "group-search", "action-search", "action-value-search"]) {
+    filterKey("Tab"); await frame();
+    const input = document.getElementById(id), box = input.getBoundingClientRect(), sidebar = document.querySelector(".sidebar").getBoundingClientRect();
+    assert(document.activeElement === input && box.height > 0 && box.top >= sidebar.top - 1 && box.bottom <= sidebar.bottom + 1, `Filter ${id} cannot be reached inside the sidebar at ${innerWidth}px`);
+  }
+  filterKey("Tab", true);
+  assert(document.activeElement.id === "action-search", "Shift+Tab does not return to the previous filter");
+  filterKey("Escape");
+  assert(document.getElementById("filter-panel").hidden, "Escape does not close the filter panel");
   function verifyPanelFrames() {
     const reference = panel.querySelector('[data-section="main-rule"]');
     const frame = getComputedStyle(reference);
@@ -88,7 +103,9 @@ export async function verifyDetails() {
   }
   verifyPanelFrames();
   const primary = [...panel.querySelectorAll(":scope > .rule-section")];
-  assert(primary.map(node => node.dataset.section).join(",") === "scope,main-rule,sub-rules,actions,timers", "Policy sections are outside their intended reading order");
+  assert(primary.map(node => node.dataset.section).join(",") === "scope,main-rule,sub-rules,actions,timers,attributes", "Policy sections are outside their intended reading order");
+  assert(find("attributes").open && find("attributes").querySelectorAll("tbody tr").length === 5, "Exported rule attributes are not visible at the bottom of policy details");
+  assert([...find("attributes").querySelectorAll("tbody tr")].some(row => row.querySelector("th").textContent === "APP_VERSION" && row.querySelector("td").textContent === "1.0"), "An exported rule attribute was renamed or omitted");
   const identity = panel.querySelector(".rule-header .policy-identity");
   assert(identity?.textContent === "ID office" && parseFloat(getComputedStyle(identity).fontSize) < 11, "Policy ID is not available as secondary information");
   assert(![...panel.querySelectorAll(".rule-header button")].some(button => button.textContent === "Copy ID"), "Copy ID is prominent in the header");
@@ -125,6 +142,10 @@ export async function verifyDetails() {
   toggle.click();
   await frame();
   assert(getComputedStyle(panel.querySelector(".element-diagnostics")).visibility === "hidden", "Diagnostics did not hide");
+  const filterDiagnostics = find("main-rule").querySelector(".condition-filter > .element-diagnostics");
+  assert(filterDiagnostics.textContent.includes("FILTER_ID first") && getComputedStyle(filterDiagnostics).visibility === "hidden", "Filter ID is not controlled by diagnostics");
+  assert(!find("main-rule").querySelector(".condition-filter > .inline-identifier"), "Filter ID remains visible outside diagnostics");
+  assert(getComputedStyle(find("attributes").querySelector("table")).visibility === "visible", "Hiding diagnostics hides the attributes section");
   assert(measured.every((node, index) => Math.abs(node.getBoundingClientRect().height - heights[index]) < 1), "Hiding diagnostics changes row heights");
   assert(getComputedStyle(identity).visibility === "visible" && getComputedStyle(identifier).visibility === "visible", "Hiding diagnostics hides identifiers");
   toggle.click();
@@ -136,6 +157,7 @@ export async function verifyDetails() {
     await frame();
     const popup = document.querySelector(".context-popover[open]");
     assert(popup && expected.every(value => popup.textContent.includes(value)) && absent.every(value => !popup.textContent.includes(value)), `Exported fields have the wrong owner: ${expected.join(", ")}`);
+    if (expected.includes("PLUGIN_NAME")) assert(popup.querySelector(".context-field dt").textContent === "PLUGIN_NAME", "Plugin name is not the first diagnostic field");
     assert(popup.contains(document.activeElement), "Exported fields did not take keyboard focus");
     if (expected.includes("APP_VERSION")) {
       for (const key of ["+", "-"]) {
@@ -152,7 +174,13 @@ export async function verifyDetails() {
   }
   await inspect(panel.querySelector('.rule-header [data-diagnostic-owner]'), ["APP_VERSION", "office"], ["FILTER_ID"]);
   const firstCondition = find("main-rule").querySelector(".condition");
-  assert(firstCondition.querySelector(".diagnostic-preview")?.textContent.includes("PLUGIN_NAME Inventory"), "Condition metadata is not alongside its heading");
+  const firstExpression = firstCondition.closest(".expression-line");
+  assert(firstExpression?.querySelector(".expression-prefix").textContent.includes("┌"), "Nested OR conditions lost their shared scope bracket");
+  assert(firstExpression.querySelector(".expression-rail"), "Scope rail does not continue through condition details");
+  assert(!find("main-rule").textContent.includes("( GROUP )"), "Redundant group rows are still displayed");
+  const gutter = firstExpression.querySelector(".expression-gutter").getBoundingClientRect();
+  assert(firstCondition.getBoundingClientRect().left >= gutter.right - 1, "Expression prefix overlaps its condition");
+  assert(firstCondition.querySelector(".diagnostic-preview")?.textContent.startsWith("PLUGIN_NAME Inventory"), "Plugin name is not first alongside its condition");
   await inspect(firstCondition.querySelector(".context-line .element-diagnostics"), ["FIELD_NAME", "device.os", "PLUGIN_NAME", "LEFT_PARENTHESIS", "LOGIC"], ["FILTER_ID"]);
   await inspect(firstCondition.querySelector(".condition-filter > .element-diagnostics"), ["FILTER_ID", "first", "CASE_SENSITIVE"], ["PLUGIN_NAME"]);
   await inspect(action.querySelector(".action-heading .element-diagnostics"), ["SEND_NOTIFICATION", "DISABLED"], ["recipient"]);
@@ -161,7 +189,8 @@ export async function verifyDetails() {
   find("sub-rules").open = false;
   await frame();
   document.querySelector('[data-condition-view="text"]').click();
-  assert(find("main-rule").querySelector(".logic-text"), "Text conditions stopped rendering");
+  const textConditions = find("main-rule").querySelector(".logic-text");
+  assert(textConditions && textConditions.textContent.includes('= "Example OS"') && textConditions.textContent.includes("AND NOT") && textConditions.textContent.includes("\n"), "Readable infix text conditions stopped rendering");
   document.querySelector('[data-condition-view="visual"]').click();
   assert(find("main-rule").querySelector(".condition-title"), "Visual conditions stopped rendering");
   async function select(id, name) {

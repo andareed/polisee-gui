@@ -76,7 +76,10 @@ leave the currently displayed document intact and show an error.
 ## Available interactions
 
 - Policy/folder/subpolicy tree, enabled indicators, expand/collapse, and pinned
-  shortcuts. Source subrule order is preserved.
+  shortcuts. Folders and top-level policies are sorted by name with numeric
+  ordering (for example, 1.1.01 before 1.1.02 and 1.1.2 before 1.1.10), with
+  folders first. Source subrule order is preserved. Search result navigation
+  follows the displayed tree order.
 - Free text and quoted phrases, plus combined property, group, action, and action
   parameter filters with data-derived suggestions and removable filter chips.
 - Group suggestions show one entry per named group, with its ID alongside in
@@ -93,6 +96,8 @@ leave the currently displayed document intact and show an error.
   frames, headers and padding match Conditions. Empty scope/action sections and
   default-only timing start folded with a short summary. The condition diagram
   retains its layout, with muted technical fields alongside each condition.
+  Attributes appears at the bottom with every exported rule attribute and value,
+  including empty values, and stays visible when diagnostics are hidden.
 - Large segment collections use an eight-row overview with name/ID search and
   paging. Selecting a segment opens a side inspector containing a 25-row range
   page, literal address/ID/value search, result/total counts and visible IDs.
@@ -103,7 +108,8 @@ leave the currently displayed document intact and show an error.
   library catalog still supplies policy queries. Range search filters exported
   text without inferring address containment or fetching external definitions.
 - The top Diagnostics toggle shows or hides contextual exported fields without
-  changing row heights or scroll position. Condition and filter fields use a
+  changing row heights or scroll position. PLUGIN_NAME is shown first in previews
+  and inspectors. Filter IDs appear only in diagnostics. Condition and filter fields use a
   muted, single-line strip; dotted labels and local field controls open a small
   overlay for the owning element's complete values. Actions, parameters, scope,
   schedules, timers, folders, segments and ranges retain their own context.
@@ -111,7 +117,10 @@ leave the currently displayed document intact and show an error.
   diagnostics off; click the small policy ID to copy it, or use Ctrl/Cmd+C.
 - Explicit notices for externally stored expressions; unknown operators retain
   their exported names and are not interpreted as another operator.
-- Visual and Text condition display modes for the library expression tree.
+- Visual and Text condition modes share the library expression projection.
+  Visual mode uses inline operators and scope brackets; Text mode uses a readable
+  infix expression with logical line breaks and actual operand values. Both
+  remain available from the Conditions view switch.
   Exported condition-level grouping metadata remains visible. Normalized-flow
   presentation is limited to the information supplied by the library API.
 - Copy policy ID, pin/unpin, and collapsible detail sections.
@@ -120,11 +129,14 @@ leave the currently displayed document intact and show an error.
   local storage. When storage fails, zoom remains usable for the session.
 - `Alt+H` / `Alt+L` focus the tree / details. `j/k` and up/down navigate only
   inside the focused pane; in details they scroll without changing policy.
-  `[` / `]` jump between detail headings, and arrows or `h/l` collapse/expand the
+  Letters remain text when editing filters or file paths.
+  `[` / `]` jump between detail headings, and `h/l` or left/right collapse/expand the
   focused heading or tree branch. Page Up/Down and Home/End browse details.
-- `/` focuses search; `Alt+G/P/A/V` open and focus Group, Property, Action and
-  Action value. Native Tab, Shift+Tab, Enter and Space behavior remains available
-  on controls and section headings. Escape closes suggestions or the inspector,
+- `/` reveals Text, Property, Group, Action and Action value filters. Tab and
+  Shift+Tab move between filter fields without accepting a suggestion; Enter
+  applies filters. The Filters button stays available in narrow windows.
+  Native control activation remains available outside the filter editor.
+  Escape closes filters or the inspector,
   otherwise focusing the tree without reloading the policy.
 - `n/N` navigate results, `p` pins, Ctrl/Cmd+O opens, Ctrl/Cmd+C copies the selected
   policy ID when no text is selected outside inputs, and `?` shows shortcuts.
@@ -187,21 +199,26 @@ The Go application's default version is maintained only in `main.go` as
 `buildVersion`. The desktop frontend reads it through Go's `BuildInfo` binding;
 there is no separate frontend version.
 
-Ordinary builds **do not check for updates** because no upstream repository is
-configured. Assigning the Go version does not create a tag or publish a release.
+Desktop builds check `andareed/polisee-gui` for a newer stable GitHub release on
+startup and show a dismissible notification with **View release** when one is
+available. The current version remains visible beside the startup preferences.
+Checks run in the background and never block policy loading. The browser preview
+and native smoke checks do not request releases.
 
 For a release build, a maintainer may inject an actual stable
-version and explicitly opt into advice from `andareed/polisee-gui`. Set
+version. Set
 `COMPARABLE_VERSION` to that build's real three-part stable version before:
 
 ```sh
-make build BUILD_LDFLAGS="-X main.buildVersion=$COMPARABLE_VERSION -X main.updateRepository=andareed/polisee-gui"
+make build BUILD_LDFLAGS="-X main.buildVersion=$COMPARABLE_VERSION"
 ```
 
-Version alone does not enable requests; an unsupported version or repository
-keeps checks disabled. The visible build status states whether checks are
-configured. Release versions and tags are maintained independently for this
-GUI repository.
+An unsupported version (such as `dev`) or an empty repository disables requests.
+To opt out explicitly, build with `BUILD_LDFLAGS='-X main.updateRepository='`.
+The visible build status states whether checks are enabled. Assigning the Go
+version does not create a tag or publish a release. Release versions and tags
+are maintained independently for this GUI repository; plain Git tags without
+a published release do not trigger notifications.
 
 When configured, Go queries GitHub's latest stable release with a five-second
 request deadline and one-MiB response limit, never following redirects.

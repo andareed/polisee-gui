@@ -133,6 +133,19 @@ func TestDevelopmentAndInvalidBuildsNeverRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestCurrentAndOlderReleasesDoNotNotify(t *testing.T) {
+	for _, build := range []string{"1.10.0", "1.11.0", "2.0.0"} {
+		t.Run(build, func(t *testing.T) {
+			store, _ := settings.Open("")
+			c := New(store, build, Repository)
+			c.client.Transport = transport(func(*http.Request) (*http.Response, error) { return reply(200, releaseJSON), nil })
+			if found := c.Check(context.Background()); found != nil {
+				t.Fatalf("notified build %s about release %s", build, found.Version)
+			}
+		})
+	}
+}
 func TestPoisonedCacheCannotSupplyLink(t *testing.T) {
 	c, store := checker(t)
 	_ = store.Change(func(data *settings.Data) error {

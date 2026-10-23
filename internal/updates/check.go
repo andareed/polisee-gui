@@ -97,7 +97,8 @@ func New(store *settings.Store, buildVersion, repository string) *Checker {
 func (c *Checker) Info() Info { return c.info }
 
 // Check silently ignores network/API/storage failures. Only successful results
-// (including a 404/no release) are cached, for 24 hours. Development is opt-out.
+// (including a 404/no release) are cached, for 24 hours. Unsupported build
+// versions or an empty repository disable requests.
 func (c *Checker) Check(ctx context.Context) *settings.Release {
 	c.mu.Lock()
 	defer c.mu.Unlock()

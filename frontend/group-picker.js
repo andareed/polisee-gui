@@ -24,7 +24,7 @@ export class GroupPicker {
       } else if (event.key === "Enter" && this.isOpen && this.active >= 0) {
         event.preventDefault(); event.stopPropagation(); this.choose(this.rows[this.active]);
       } else if (event.key === "Escape" && this.isOpen) {
-        event.preventDefault(); event.stopPropagation(); this.close();
+        this.close();
       } else if (event.key === "Enter") this.close();
     });
   }

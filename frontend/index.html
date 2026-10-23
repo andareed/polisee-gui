@@ -24,12 +24,13 @@
         <div class="sidebar-title"><h2>Policy tree</h2><span id="tree-count" class="count"></span><button id="expand-all" class="icon-button" title="Expand all folders" aria-label="Expand all folders">⊞</button><button id="collapse-all" class="icon-button" title="Collapse all folders" aria-label="Collapse all folders">⊟</button></div>
         <form id="search-form" role="search">
           <label class="search-box"><span aria-hidden="true">⌕</span><input id="text-search" type="search" aria-label="Search policy text" placeholder="Search policies, values, descriptions…" autocomplete="off"><kbd>/</kbd></label>
-          <button type="button" id="filter-toggle" class="filter-toggle" aria-expanded="false">Filters <span id="filter-count"></span><span aria-hidden="true">⌄</span></button>
+          <button type="button" id="filter-toggle" class="filter-toggle" aria-expanded="false" aria-controls="filter-panel">Filters <kbd>/</kbd><span id="filter-count"></span><span aria-hidden="true">⌄</span></button>
           <div id="filter-panel" class="filter-panel" hidden>
-            <label><span class="filter-label">Property <kbd>Alt+P</kbd></span><input id="property-search" list="property-options" placeholder="Field name or label" autocomplete="off" aria-keyshortcuts="Alt+P"></label>
-            <div class="group-combobox"><label for="group-search" class="filter-label">Group <kbd>Alt+G</kbd></label><input id="group-search" role="combobox" aria-autocomplete="list" aria-controls="group-options" aria-expanded="false" aria-keyshortcuts="Alt+G" placeholder="Group name or ID" autocomplete="off"><div id="group-options" class="group-options" role="listbox" aria-label="Group suggestions" hidden></div></div>
-            <label><span class="filter-label">Action <kbd>Alt+A</kbd></span><input id="action-search" list="action-options" placeholder="Action name" autocomplete="off" aria-keyshortcuts="Alt+A"></label>
-            <label><span class="filter-label">Action value <kbd>Alt+V</kbd></span><input id="action-value-search" list="value-options" placeholder="Parameter value" autocomplete="off" aria-keyshortcuts="Alt+V"></label>
+            <label><span class="filter-label">Property</span><input id="property-search" list="property-options" placeholder="Field name or label" autocomplete="off"></label>
+            <div class="group-combobox"><label for="group-search" class="filter-label">Group</label><input id="group-search" role="combobox" aria-autocomplete="list" aria-controls="group-options" aria-expanded="false" placeholder="Group name or ID" autocomplete="off"><div id="group-options" class="group-options" role="listbox" aria-label="Group suggestions" hidden></div></div>
+            <label><span class="filter-label">Action</span><input id="action-search" list="action-options" placeholder="Action name" autocomplete="off"></label>
+            <label><span class="filter-label">Action value</span><input id="action-value-search" list="value-options" placeholder="Parameter value" autocomplete="off"></label>
+            <p class="filter-hint">Tab field · Enter apply · Esc back</p>
           </div>
           <datalist id="property-options"></datalist><datalist id="action-options"></datalist><datalist id="value-options"></datalist>
         </form>
@@ -44,10 +45,26 @@
         <div id="details" class="details" tabindex="0" role="region" aria-label="Policy contents" aria-keyshortcuts="Alt+L" aria-live="polite"><div class="empty-detail">Select a policy to inspect its definition.</div></div>
       </section>
     </main>
-    <footer class="app-footer"><span><kbd>Alt+H</kbd> tree <kbd>Alt+L</kbd> details <kbd>/</kbd> search <kbd>Alt+G</kbd> groups <kbd>j</kbd><kbd>k</kbd> navigate</span><button id="help-button" class="text-button">Keyboard shortcuts <kbd>?</kbd></button><span id="status-message" role="status" aria-live="polite">Ready</span></footer>
+    <footer class="app-footer"><span><kbd>Alt+H</kbd> tree <kbd>Alt+L</kbd> details <kbd>/</kbd> filters <kbd>j</kbd><kbd>k</kbd> move <kbd>Enter</kbd> open</span><button id="help-button" class="text-button">Keyboard shortcuts <kbd>?</kbd></button><span id="status-message" role="status" aria-live="polite">Ready</span></footer>
   </div>
   <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-message"></span><button id="dismiss-error" aria-label="Dismiss error">×</button></div>
-  <dialog id="help-dialog"><div class="dialog-header"><h2>Keyboard shortcuts</h2><button id="close-help" class="icon-button" aria-label="Close shortcuts">×</button></div><dl><dt>Alt+H / Alt+L</dt><dd>Focus policy tree / policy details (or open range inspector)</dd><dt>/</dt><dd>Focus policy search</dd><dt>Alt+G / Alt+P</dt><dd>Open filters and focus Group / Property</dd><dt>Alt+A / Alt+V</dt><dd>Open filters and focus Action / Action value</dd><dt>↑ / ↓, Enter</dt><dd>Browse group suggestions and select a name; typed IDs also work</dd><dt>j / k or ↑ / ↓</dt><dd>Navigate policies in the tree; scroll in details and the range inspector</dd><dt>← / → or h / l</dt><dd>Collapse or expand the focused tree branch or detail section</dd><dt>[ / ]</dt><dd>Focus the previous / next detail section</dd><dt>Page Up / Down</dt><dd>Scroll the focused detail pane; Home / End go to its start / end</dd><dt>Enter / Space</dt><dd>Activate the focused control or toggle a section</dd><dt>Tab / Shift+Tab</dt><dd>Move forward / backward through controls and section headings</dd><dt>n / Shift+N</dt><dd>Next or previous matching policy</dd><dt>p</dt><dd>Pin or unpin the selected policy</dd><dt>Ctrl/Cmd+C</dt><dd>Copy the selected policy ID when no text is selected, outside an input</dd><dt>Ctrl/Cmd+O</dt><dd>Open a policy export</dd><dt>Ctrl/Cmd +/-/0</dt><dd>Zoom in, out, or reset; Ctrl/Cmd+wheel also zooms</dd><dt>Escape</dt><dd>Close suggestions or the range inspector; otherwise focus the tree</dd></dl></dialog>
+  <dialog id="help-dialog"><div class="dialog-header"><h2>Keyboard shortcuts</h2><button id="close-help" class="icon-button" aria-label="Close shortcuts">×</button></div><dl>
+    <dt>Alt+H / Alt+L</dt><dd>Focus tree / details</dd>
+    <dt>j / k or ↑ / ↓</dt><dd>Navigate the focused pane. In editors j/k type text; arrows choose suggestions.</dd>
+    <dt>h / l or ← / →</dt><dd>Collapse / expand a tree branch or focused section</dd>
+    <dt>Enter</dt><dd>Open the selected item, activate a control or apply filters</dd>
+    <dt>Escape</dt><dd>Close filters or the inspector and return</dd>
+    <dt>/</dt><dd>Show all filters and focus Text</dd>
+    <dt>Tab / Shift+Tab</dt><dd>Next / previous filter field; otherwise follow controls</dd>
+    <dt>Ctrl/Cmd+R</dt><dd>Clear filters while editing them</dd>
+    <dt>[ / ]</dt><dd>Previous / next detail section</dd>
+    <dt>Page Up / Down</dt><dd>Scroll the focused pane; Home / End go to its start / end</dd>
+    <dt>n / Shift+N</dt><dd>Next / previous matching policy</dd>
+    <dt>p</dt><dd>Pin / unpin the selected policy</dd>
+    <dt>Ctrl/Cmd+C</dt><dd>Copy selected text, or the policy ID outside inputs</dd>
+    <dt>Ctrl/Cmd+O</dt><dd>Open a policy export</dd>
+    <dt>Ctrl/Cmd +/-/0</dt><dd>Zoom; Ctrl/Cmd+wheel also zooms</dd>
+  </dl></dialog>
   <dialog id="range-inspector" class="range-inspector" aria-labelledby="range-title">
     <div class="range-heading"><div class="range-heading-text"><div class="context-line"><h2 id="range-title">Segment ranges</h2><span id="range-metadata"></span></div><div id="range-segment-id" class="browse-id"></div><div id="range-segment-count" class="browse-count"></div></div><button data-diagnostics-toggle aria-pressed="true" class="quiet small" title="Show or hide exported fields beside their elements">Diagnostics</button><button id="previous-segment" class="quiet small" aria-label="Previous segment" title="Previous segment">‹</button><button id="next-segment" class="quiet small" aria-label="Next segment" title="Next segment">›</button><button id="close-ranges" class="icon-button" aria-label="Close range inspector" title="Close range inspector (Escape)">×</button></div>
     <label class="range-search-label" for="range-search">Find exported ranges<input id="range-search" type="search" placeholder="Address, ID or exported value…" autocomplete="off"></label>

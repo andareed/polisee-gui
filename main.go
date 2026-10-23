@@ -23,7 +23,7 @@ import (
 
 // Default application version for the Go GUI; the frontend reads it through BuildInfo.
 var buildVersion = "0.2.1"
-var updateRepository = ""
+var updateRepository = updates.Repository
 
 type App struct {
 	ctx             context.Context

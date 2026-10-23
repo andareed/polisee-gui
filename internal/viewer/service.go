@@ -67,11 +67,12 @@ type Logic struct {
 }
 
 type RuleView struct {
-	Rule     polisee.Rule  `json:"rule"`
-	Logic    *Logic        `json:"logic"`
-	Children []RuleView    `json:"children"`
-	Actions  []ActionView  `json:"actions"`
-	Segments SegmentTotals `json:"segments"`
+	Rule     polisee.Rule             `json:"rule"`
+	Logic    *Logic                   `json:"logic"`
+	Layout   []polisee.ExpressionLine `json:"layout"`
+	Children []RuleView               `json:"children"`
+	Actions  []ActionView             `json:"actions"`
+	Segments SegmentTotals            `json:"segments"`
 }
 
 type Detail struct {
@@ -183,7 +184,7 @@ func (s *Service) GetRule(id string) (Detail, error) {
 }
 
 func ruleView(engine *polisee.Engine, rule polisee.Rule, segments map[string][]indexedSegment) RuleView {
-	view := RuleView{Rule: rule, Logic: logicView(rule.Expression), Segments: segmentTotals(segments[rule.ID])}
+	view := RuleView{Rule: rule, Logic: logicView(rule.Expression), Layout: rule.Expression.Layout(), Segments: segmentTotals(segments[rule.ID])}
 	for _, action := range rule.Actions {
 		view.Actions = append(view.Actions, actionView(action))
 	}
@@ -207,7 +208,7 @@ func logicView(expression *polisee.Expression) *Logic {
 		result.Extensions = append(append([]polisee.Element(nil), result.Extensions...), c.Extensions...)
 		result.Field = c.Field
 		if c.Logic != "" || c.LeftParentheses != 0 || c.RightParentheses != 0 {
-			result.Notice = "Exported LOGIC/parenthesis attributes are preserved as metadata. This view shows the library expression tree; it does not normalize condition-level grouping or evaluate criteria."
+			result.Notice = "Grouping follows the library expression tree. Exported LOGIC and parenthesis attributes are preserved as metadata; criteria are not evaluated."
 		}
 		result.Filters = c.Filters
 		switch c.UnknownBehavior() {
@@ -228,52 +229,8 @@ func logicView(expression *polisee.Expression) *Logic {
 		}
 		result.Children = append(result.Children, *childView)
 	}
-	result.Text = logicText(result)
+	result.Text = expression.Text()
 	return result
-}
-
-// logicText formats the library tree without normalizing operators or evaluating criteria.
-func logicText(logic *Logic) string {
-	parts := []string{}
-	if logic.Label != "" {
-		parts = append(parts, logic.Label)
-		metadata := []string{}
-		for _, attr := range logic.Attributes {
-			metadata = append(metadata, attr.Name+"="+strconv.Quote(attr.Value))
-		}
-		if len(metadata) > 0 {
-			parts = append(parts, "{"+strings.Join(metadata, ", ")+"}")
-		}
-		for _, filter := range logic.Filters {
-			values := []string{}
-			for _, attr := range filter.Attributes {
-				values = append(values, attr.Name+"="+strconv.Quote(attr.Value))
-			}
-			if filter.Text != "" {
-				values = append(values, strconv.Quote(filter.Text))
-			}
-			for _, operand := range filter.Operands {
-				values = append(values, elementText(operand))
-			}
-			parts = append(parts, "FILTER("+strings.Join(values, ", ")+")")
-		}
-		if logic.Unknown != "" {
-			parts = append(parts, logic.Unknown)
-		}
-	}
-	for _, child := range logic.Children {
-		parts = append(parts, child.Text)
-	}
-	for _, external := range logic.External {
-		parts = append(parts, "External expression unavailable: "+strconv.Quote(external))
-	}
-	for _, extension := range logic.Extensions {
-		parts = append(parts, elementText(extension))
-	}
-	if logic.Label != "" {
-		return strings.Join(parts, " ")
-	}
-	return logic.Operator + "(\n  " + strings.ReplaceAll(strings.Join(parts, ",\n"), "\n", "\n  ") + "\n)"
 }
 
 func elementText(element polisee.Element) string {

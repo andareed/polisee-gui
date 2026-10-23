@@ -99,7 +99,7 @@ export class SegmentBrowser {
         }, `Inspect ranges for ${segment.name || "unnamed segment"}`);
         choose.dataset.segmentKey = segment.key;
         choose.addEventListener("keydown", event => {
-          if (!["ArrowDown", "ArrowUp", "j", "k"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+          if (!["j", "k", "ArrowDown", "ArrowUp"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
           event.preventDefault(); event.stopPropagation();
           const buttons = [...this.listBody.querySelectorAll("button")];
           buttons[Math.max(0, Math.min(buttons.length - 1, index + (["j", "ArrowDown"].includes(event.key) ? 1 : -1)))]?.focus();

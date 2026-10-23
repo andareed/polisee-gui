@@ -38,13 +38,36 @@ export async function verifyWorkflow(restoreDemo) {
     await until(() => $("details").querySelector("h2")?.textContent === name, `Could not inspect ${name}`);
   }
   function pageButton(host, label) { return [...host.querySelectorAll("button")].find(node => node.getAttribute("aria-label") === label); }
+  await importXML(`<POLICY_FOLDER ID="ordering" NAME="Ordering examples"><POLICIES>
+    <POLICY><RULE ID="second" NAME="1.1.02 Device discovery"><RULE_CHAIN><INNER_RULE ID="z" NAME="Z step"/><INNER_RULE ID="a" NAME="A step"/></RULE_CHAIN></RULE></POLICY>
+    <POLICY><RULE ID="tenth" NAME="1.1.10 Extended discovery"/></POLICY>
+    <POLICY><RULE ID="first" NAME="1.1.01 Network discovery"/></POLICY>
+  </POLICIES></POLICY_FOLDER>`, "1.1.02 Device discovery");
+  const policyOrder = () => [...$("tree").querySelectorAll('.tree-row[data-key^="rule:"]')].map(row => row.dataset.key).join(",");
+  assert(policyOrder() === "rule:first,rule:second,rule:z,rule:a,rule:tenth", "Policy names are not in numeric order or subrule order changed");
+  input($("text-search"), "discovery");
+  await until(() => $("search-status").textContent === "3 matching rules" && $("details").querySelector("h2")?.textContent === "1.1.01 Network discovery", "Search did not select the first displayed match");
+  $("next-result").click();
+  await until(() => $("details").querySelector("h2")?.textContent === "1.1.02 Device discovery", "Next result does not follow displayed policy order");
+  $("next-result").click();
+  await until(() => $("details").querySelector("h2")?.textContent === "1.1.10 Extended discovery", "Numeric result ordering failed");
+  $("previous-result").click();
+  await until(() => $("details").querySelector("h2")?.textContent === "1.1.02 Device discovery", "Previous result does not follow displayed policy order");
+
   const fixture = browseFixture();
   await importXML(fixture, "Segment browsing");
   await until(() => document.querySelectorAll(".segment-table tbody tr button").length === 8, "Segment overview is not limited to eight rows");
   assert(!$("details").textContent.includes("range-23-1199"), "Unopened ranges were sent into the policy DOM");
 
-  $("details").focus(); key("g", { altKey: true });
-  assert(document.activeElement === $("group-search") && !$("filter-panel").hidden, "Alt+G does not open and focus Group");
+  $("details").focus(); key("/");
+  assert(document.activeElement === $("text-search") && !$("filter-panel").hidden, "/ does not reveal the combined filters");
+  for (const id of ["property-search", "group-search", "action-search", "action-value-search", "text-search"]) {
+    key("Tab");
+    assert(document.activeElement === $(id) && $(id).value === "", `Tab cannot reach ${id} without accepting a suggestion`);
+    const selected = document.querySelector('#tree [aria-selected="true"]')?.dataset.key;
+    assert(["h", "j", "k", "l"].every(value => !key(value).defaultPrevented) && document.activeElement === $(id) && document.querySelector('#tree [aria-selected="true"]')?.dataset.key === selected, `Vim navigation intercepts typing in ${id}`);
+  }
+  key("Tab"); key("Tab");
   input($("group-search"), "Office");
   const options = [...$("group-options").querySelectorAll('[role="option"]')];
   assert(options.length === 2 && options.every(node => node.querySelector(".group-option-name").textContent === "Office devices"), "Group picker is mixing names, standalone IDs or encoded values");
@@ -55,16 +78,27 @@ export async function verifyWorkflow(restoreDemo) {
   await until(() => $("filter-chips").textContent.includes("raw-id-only") && $("search-status").textContent === "1 matching rule" && $("details").querySelector("h2")?.textContent === "Segment browsing", "Typed group IDs stopped matching");
   $("clear-search").click();
   await until(() => $("search-status").textContent === "All policies", "Could not clear group filter");
-  for (const [shortcut, id] of [["p", "property-search"], ["a", "action-search"], ["v", "action-value-search"]]) {
-    key(shortcut, { altKey: true }); assert(document.activeElement === $(id), `Alt+${shortcut} does not focus its filter`);
-  }
+  key("h", { altKey: true }); key("/"); key("Tab");
+  input($("property-search"), "device.os"); key("Tab");
+  input($("group-search"), "staff-1"); key("Tab");
+  input($("action-search"), "ADD_TO_GROUP"); key("Tab");
+  input($("action-value-search"), "Media devices"); key("Enter");
+  await until(() => $("search-status").textContent === "1 matching rule" && document.activeElement?.dataset.key === "rule:bulk", "Combined filters cannot be applied using /, Tab and Enter");
+  $("clear-search").click();
+  await until(() => $("search-status").textContent === "All policies", "Could not clear combined filters");
   key("h", { altKey: true });
   assert(document.activeElement?.dataset.key === "rule:bulk", "Alt+H does not focus the selected policy");
+  key("j");
+  await until(() => $("details").querySelector("h2")?.textContent === "Guest access", "j did not navigate down the tree");
+  key("k");
+  await until(() => $("details").querySelector("h2")?.textContent === "Segment browsing", "k did not navigate up the tree");
   key("ArrowDown");
   await until(() => $("details").querySelector("h2")?.textContent === "Guest access", "Tree keyboard navigation stopped working");
+  key("l");
+  assert(document.activeElement?.dataset.key === "rule:child" && !document.querySelector(".context-popover"), "l on a leaf opened details or an inspector");
   key("l", { altKey: true });
   assert($("details").contains(document.activeElement) || document.activeElement === $("details"), "Alt+L does not focus details");
-  key("ArrowDown"); key("j");
+  assert(key("j").defaultPrevented && key("k").defaultPrevented, "j/k do not navigate the focused details pane");
   assert(document.querySelector('#tree [aria-selected="true"]').dataset.key === "rule:child", "Detail navigation changed policy selection");
   key("h", { altKey: true }); key("ArrowUp");
   await until(() => $("details").querySelector("h2")?.textContent === "Segment browsing", "Could not navigate back to the bulk policy");
@@ -73,6 +107,8 @@ export async function verifyWorkflow(restoreDemo) {
   assert(document.activeElement?.parentElement.dataset.section === "scope", "Section jump does not focus the first heading");
   key("ArrowLeft"); assert(!document.activeElement.parentElement.open, "Left arrow did not collapse the focused section");
   key("ArrowRight"); assert(document.activeElement.parentElement.open, "Right arrow did not expand the focused section");
+  key("h"); assert(!document.activeElement.parentElement.open, "h did not collapse the focused section");
+  key("l"); assert(document.activeElement.parentElement.open && !document.querySelector(".context-popover"), "l did not expand the focused section");
   assert(!key("Enter").defaultPrevented && !key(" ").defaultPrevented && !key("Tab").defaultPrevented, "Details intercept native activation or Tab traversal");
   document.querySelector('[data-section="scope"]').open = true;
   await frame();
@@ -94,6 +130,9 @@ export async function verifyWorkflow(restoreDemo) {
   await until(() => $("range-inspector").open && $("range-scroll").querySelectorAll("tr[data-range-index]").length === 25, "Range inspector is not limited to 25 rows");
   assert($("range-title").textContent === "Segment 18" && $("range-segment-id").textContent.includes("segment-18") && $("range-segment-count").textContent.includes("1,200"), "Inspector header is missing identity or counts");
   assert(scope.getBoundingClientRect().height === height, "Opening ranges expanded the policy page");
+  assert(!key("j").defaultPrevented && !key("k").defaultPrevented && document.activeElement === $("range-search"), "Vim navigation intercepts typing in the range filter");
+  $("range-scroll").focus();
+  assert(key("j").defaultPrevented && key("k").defaultPrevented, "j/k do not navigate the range inspector");
   assert($("range-scroll").textContent.includes("range-18-0") && !$("range-scroll").textContent.includes("range-18-1199"), "Range pages are unbounded or IDs are hidden");
   pageButton($("range-pager"), "Next range page").click();
   await until(() => $("range-scroll").querySelector('tr[data-range-index="25"]'), "Range paging did not advance");
@@ -138,13 +177,18 @@ export async function verifyWorkflow(restoreDemo) {
   await until(() => document.querySelector(".segment-overview") !== oldHost && document.querySelectorAll(".segment-table tbody tr button").length === 8, "Reload did not reset document-specific browsing state");
   assert(document.querySelector(".segment-search").value === "", "A replaced document inherited old segment filters");
 
-  await importXML(`<POLICY_FOLDER ID="fields-folder" NAME="Field examples" CUSTOM="folder value"><RULE ID="fields" NAME="Field ownership">
+  await importXML(`<POLICY_FOLDER ID="fields-folder" NAME="Field examples" CUSTOM="folder value"><RULE ID="fields" NAME="Field ownership" DESCRIPTION="" CACHE_TTL="60" xmlns:x="urn:fixture" x:NOTE="&lt;img src=x&gt;">
     <EXPRESSION ID="expression-fields" EXPR_TYPE="AND"><CONDITION FIELD_NAME="device.os"><FILTER TYPE="equals"><VALUE VALUE="Example OS"/></FILTER></CONDITION></EXPRESSION>
     <ACTION ID="action-fields" NAME="ADD_TO_GROUP"><PARAM NAME="group-name" VALUE="" MARKER="empty target"/><PARAM ID="parameter-fields" NAME="group-name" VALUE="id:42;name:Office devices" MARKER="named target"/></ACTION>
     <INACTIVITY_TTL USE_DEFAULT="true" VALUE="0" CUSTOM="default timer"/>
     <FUTURE xmlns:x="urn:fixture" x:NOTE="&lt;img src=x&gt;" EMPTY=""><TEXT>  Exported
 text  </TEXT></FUTURE>
   </RULE></POLICY_FOLDER>`, "Field ownership");
+  const attributes = $("details").lastElementChild;
+  const attributeValues = new Map([...attributes.querySelectorAll("tbody tr")].map(row => [row.querySelector("th").textContent, row.querySelector("td").textContent]));
+  assert(attributes.dataset.section === "attributes" && attributes.open, "Rule attributes are not visible at the bottom of the policy");
+  assert(attributeValues.get("DESCRIPTION") === '\"\"' && attributeValues.get("CACHE_TTL") === "60", "Empty or unfamiliar rule attributes were omitted");
+  assert(attributeValues.get("{urn:fixture}NOTE") === "<img src=x>" && !attributes.querySelector("img"), "Namespaced rule attributes were lost or interpreted as markup");
   function localFields(control) {
     control.click();
     const popup = document.querySelector(".context-popover[open]");
@@ -155,7 +199,7 @@ text  </TEXT></FUTURE>
   const primaryParameter = $("details").querySelector(".primary-fact");
   assert(primaryParameter.textContent.includes("parameter-fields"), "Parameter IDs are not visible beside the value");
   $("diagnostics-toggle").click();
-  const expressionID = $("details").querySelector(".logic-heading-main .inline-identifier");
+  const expressionID = [...$("details").querySelectorAll(".expression-content .inline-identifier")].find(node => node.textContent.includes("expression-fields"));
   assert(expressionID?.textContent.includes("expression-fields") && getComputedStyle(expressionID).visibility === "visible", "Expression IDs disappear with diagnostics hidden");
   $("diagnostics-toggle").click();
   let popup = localFields(primaryParameter.querySelector(".element-diagnostics"));
@@ -179,6 +223,23 @@ text  </TEXT></FUTURE>
   popup = localFields($("details").querySelector(".rule-header .element-diagnostics"));
   assert(popup.textContent.includes("folder value") && !$("details").querySelector('[data-section="folder-diagnostics"]'), "Folder fields still use a catch-all diagnostics section");
   closeFields(popup);
+
+  const stateActions = '<ACTION NAME="DEFAULT_ACTION"/><ACTION NAME="ENABLED_ACTION" DISABLED="false"/><ACTION NAME="DISABLED_ACTION" DISABLED="true"/>';
+  await importXML(`<POLICY_FOLDER ID="action-states"><RULE ID="action-off" NAME="Disabled rule" ENABLED="false">${stateActions}
+    <INNER_RULE ID="action-inherited" NAME="Disabled by parent" ENABLED="true">${stateActions}</INNER_RULE></RULE>
+    <RULE ID="action-on" NAME="Enabled rule" ENABLED="true">${stateActions}</RULE></POLICY_FOLDER>`, "Disabled rule");
+  for (const [id, name, ruleStatus] of [["action-off", "Disabled rule", "● Disabled"], ["action-inherited", "Disabled by parent", "● Disabled by parent"], ["action-on", "Enabled rule", "● Enabled"]]) {
+    await policy(id, name);
+    assert($("details").querySelector(".rule-header .badge").textContent === ruleStatus, "Rule status changed while separating action status");
+    for (let toggle = 0; toggle < 2; toggle++) {
+      const badges = [...$("details").querySelectorAll('[data-section="actions"] .action-heading .badge')];
+      assert(badges.map(badge => badge.textContent).join(",") === "Enabled,Enabled,Disabled", "Actions inherited their rule's status");
+      assert(badges.every(badge => getComputedStyle(badge).visibility === "visible"), "Action status disappears with diagnostics hidden");
+      assert(!$("details").querySelector('[data-section="actions"]').textContent.includes("Inactive"), "Actions still show inherited inactivity");
+      $("diagnostics-toggle").click();
+      await frame();
+    }
+  }
   await restoreDemo();
   await until(() => $("details").querySelector("h2")?.textContent === "Office access", "Could not restore the demo after workflow checks");
   $("filter-panel").hidden = true; $("filter-toggle").setAttribute("aria-expanded", "false");

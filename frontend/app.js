@@ -1,14 +1,15 @@
 import { initZoom } from "./zoom.js";
 import { bridge } from "./bridge.js";
 import { indexNodes, visibleKeys } from "./tree-model.js";
-import { element, button } from "./ui.js";
+import { element, button, shown } from "./ui.js";
 import { SegmentBrowser } from "./segments.js";
 import { GroupPicker } from "./group-picker.js";
 import { metadata, initDiagnostics, closeMetadata, metadataOpen } from "./diagnostics.js";
+import { expressionAt, expressionLayout } from "./expression-layout.js";
 
 const $ = id => document.getElementById(id);
 const state = { document: null, byKey: new Map(), children: new Map(), expanded: new Set(),
-  pins: new Set(), selectedKey: "", matches: [], rows: [], visible: null, sections: new Map(), query: {}, detailRequest: 0, searchRequest: 0 };
+  pins: new Set(), selectedKey: "", ruleOrder: [], matches: [], rows: [], visible: null, sections: new Map(), query: {}, detailRequest: 0, searchRequest: 0 };
 const fields = { text: "text-search", property: "property-search", group: "group-search", action: "action-search", actionValue: "action-value-search" };
 let searchTimer;
 let preferenceQueue = Promise.resolve();
@@ -20,7 +21,7 @@ let groupChoice = null;
 let lastDetailFocus = null;
 const segmentBrowser = new SegmentBrowser(bridge, error);
 const groupPicker = new GroupPicker($("group-search"), $("group-options"), () => state.document?.groupSuggestions || [], option => {
-  groupChoice = option; clearTimeout(searchTimer); refreshSearch();
+  groupChoice = option; clearTimeout(searchTimer); refreshSearch().then(focusTree);
 });
 initDiagnostics();
 function persistSelection(generation, id) {
@@ -60,11 +61,12 @@ async function installDocument(payload) {
   const index = indexNodes(result.nodes || []);
   state.byKey = index.byKey;
   state.children = index.children;
+  state.ruleOrder = index.ruleIDs;
   state.expanded = new Set((result.nodes || []).filter(n => n.kind === "folder" || n.kind === "policy").map(n => n.key));
   state.pins = new Set([...state.pins].filter(id => state.byKey.has(`rule:${id}`)));
   state.query = {};
   for (const id of Object.values(fields)) $(id).value = "";
-  state.matches = (result.nodes || []).filter(n => n.kind !== "folder").map(n => n.id);
+  state.matches = state.ruleOrder;
   state.visible = null;
   $("document-name").textContent = result.name;
   $("document-counts").textContent = `${result.folderCount} folders  ·  ${result.policyCount} policies  ·  ${result.ruleCount} rules`;
@@ -104,7 +106,8 @@ async function refreshSearch(selectFirst = true) {
   try {
     const result = await bridge.search(state.query);
     if (request !== state.searchRequest || result.generation !== state.document.generation) return;
-    state.matches = (result.matches || []).map(match => match.ruleId);
+    const matchedIDs = new Set((result.matches || []).map(match => match.ruleId));
+    state.matches = state.ruleOrder.filter(id => matchedIDs.has(id));
     state.visible = activeFilters() ? visibleKeys(state.document.nodes, state.matches) : null;
     renderTree();
     if (!state.matches.length && activeFilters()) renderEmpty("No policies match these filters. Try a broader search or clear the filters.");
@@ -259,7 +262,8 @@ function attributesInline(attributes) {
   });
 }
 function isIdentifier(attribute) { return /(^|[_-])(ID|GUID|UUID)$/i.test(attribute.name); }
-function identifiers(attributes) { return (attributes || []).filter(isIdentifier).map(attribute => inlineIdentifier(factLabel(attribute.name), attribute.value)); }
+function isVisibleIdentifier(attribute) { return isIdentifier(attribute) && attribute.name.toUpperCase() !== "FILTER_ID"; }
+function identifiers(attributes) { return (attributes || []).filter(isVisibleIdentifier).map(attribute => inlineIdentifier(factLabel(attribute.name), attribute.value)); }
 function xmlElement(node) {
   const row = element("div", "element");
   row.append(element("span", "element-tag", node.name), ...attributesInline((node.attributes || []).filter(attribute => !isIdentifier(attribute))), ...identifiers(node.attributes), metadata(node.name, node, { compact: true }));
@@ -272,54 +276,51 @@ function xmlElement(node) {
   return row;
 }
 function externalNotice(path) { return element("div", "external-notice", `External expression unavailable: ${path}`); }
-function conditionView(logic, expression) {
-  const wrap = element("div");
-  wrap.append(conditionBody(logic, expression));
-  return wrap;
-}
-function conditionBody(logic, expression) {
+function conditionView(logic, expression, layout) {
   if (conditionMode === "text" && logic) return element("pre", "logic-text", logic.text);
-  return logicView(logic, expression);
-}
-function logicView(logic, expression) {
-  if (!logic) return empty("No condition expression is present for this rule.");
-  if (logic.label) {
-    const condition = element("div", "condition");
-    const raw = expression?.condition || {};
+  if (!expression) return empty("No condition expression is present for this rule.");
+  return expressionLayout(layout, line => {
+    const source = expressionAt(expression, line.sourcePath);
+    const sourceLogic = expressionAt(logic, line.sourcePath);
+    const contexts = (line.contextPaths || []).map(path => expressionAt(expression, path)).filter(Boolean);
+    if (!source) return empty("Expression unavailable.");
+    if (line.kind === "condition") return conditionDetail(sourceLogic, source, contexts);
+    const body = element("div", "expression-operator");
     const heading = element("div", "context-line");
-    const title = element("div", "condition-title", logic.label);
-    title.append(...identifiers(raw.attributes));
-    const source = { name: "CONDITION", attributes: raw.attributes, children: [...(raw.extensions || [])], notes: logic.notice ? [logic.notice] : [] };
-    if (expression?.attributes?.length || expression?.extensions?.length) source.children.push({ name: "EXPRESSION", attributes: expression.attributes, children: expression.extensions });
-    heading.append(title, metadata(logic.label, source, { omit: ["LABEL", "FIELD_NAME", "FILED_NAME", ...(raw.attributes || []).filter(isIdentifier).map(attribute => attribute.name)] }));
-    condition.append(heading);
-    if (logic.unknown) condition.append(element("div", "unknown-note", logic.unknown));
-    for (const filter of logic.filters || []) {
-      const row = element("div", "condition-filter");
-      const type = (filter.attributes || []).find(a => a.name === "TYPE")?.value || "filter";
-      row.append(element("span", "filter-operator", type));
-      if (filter.text?.trim()) row.append(element("span", "element-text", filter.text));
-      for (const operand of filter.operands || []) row.append(xmlElement(operand));
-      row.append(...identifiers(filter.attributes), metadata(`${logic.label} · ${type} filter`, { name: "FILTER", attributes: filter.attributes, text: filter.text }, { compact: !(filter.attributes || []).some(attribute => attribute.name !== "TYPE" && !isIdentifier(attribute)), omit: ["TYPE", ...(filter.attributes || []).filter(isIdentifier).map(attribute => attribute.name)] }));
-      condition.append(row);
-    }
-    condition.append(...(logic.external || []).map(externalNotice));
-    if (logic.children?.length) condition.append(...logic.children.map((child, index) => logicView(child, expression?.children?.[index])));
-    condition.append(...(logic.extensions || []).map(node => xmlElement(node)));
-    return condition;
+    heading.append(element("span", "", line.text), ...identifiers(source.attributes),
+      metadata(line.text, expressionMetadata(source, contexts), { compact: true }));
+    body.append(heading);
+    if (line.kind === "expression") body.append(...(source.externalExpressions || []).map(externalNotice), ...(source.extensions || []).map(xmlElement));
+    return body;
+  });
+}
+function expressionMetadata(expression, contexts = []) {
+  return { name: "EXPRESSION", attributes: expression.attributes, children: [...(expression.extensions || []),
+    ...contexts.map(context => ({ name: "EXPRESSION", attributes: context.attributes, children: context.extensions, externalExpressions: context.externalExpressions }))], externalExpressions: expression.externalExpressions };
+}
+function conditionDetail(logic, expression, contexts) {
+  const condition = element("div", "condition");
+  const raw = expression?.condition || {};
+  const heading = element("div", "context-line");
+  const title = element("div", "condition-title", logic.label);
+  title.append(...identifiers(raw.attributes), ...identifiers(expression.attributes), ...contexts.flatMap(context => identifiers(context.attributes)));
+  const source = { name: "CONDITION", attributes: raw.attributes, children: [...(raw.extensions || [])], notes: logic.notice ? [logic.notice] : [] };
+  if (expression?.attributes?.length || expression?.extensions?.length || contexts.length) source.children.push(expressionMetadata(expression, contexts));
+  heading.append(title, metadata(logic.label, source, { omit: ["LABEL", "FIELD_NAME", "FILED_NAME", ...(raw.attributes || []).filter(isVisibleIdentifier).map(attribute => attribute.name)] }));
+  condition.append(heading);
+  if (logic.unknown) condition.append(element("div", "unknown-note", logic.unknown));
+  for (const filter of logic.filters || []) {
+    const row = element("div", "condition-filter");
+    const type = (filter.attributes || []).find(a => a.name === "TYPE")?.value || "filter";
+    row.append(element("span", "filter-operator", type));
+    if (filter.text?.trim()) row.append(element("span", "element-text", filter.text));
+    for (const operand of filter.operands || []) row.append(xmlElement(operand));
+    row.append(metadata(`${logic.label} · ${type} filter`, { name: "FILTER", attributes: filter.attributes, text: filter.text }, { compact: !(filter.attributes || []).some(attribute => attribute.name !== "TYPE"), omit: ["TYPE"] }));
+    condition.append(row);
   }
-  const group = element("div", "logic-group");
-  const heading = element("div", "context-line logic-heading");
-  const primary = element("span", "logic-heading-main");
-  primary.append(element("span", "logic-operator", logic.operator === "PARENTHESIS" ? "( GROUP )" : logic.operator), ...identifiers(expression?.attributes));
-  const hasFields = expression?.attributes?.some(attribute => attribute.name !== "EXPR_TYPE" && !isIdentifier(attribute)) || expression?.extensions?.length;
-  heading.append(primary, metadata(`${logic.operator} expression`, { name: "EXPRESSION", attributes: expression?.attributes, children: expression?.extensions }, { compact: !hasFields, omit: ["EXPR_TYPE", ...(expression?.attributes || []).filter(isIdentifier).map(attribute => attribute.name)] }));
-  group.append(heading);
-  const children = element("div", "logic-children");
-  children.append(...(logic.children || []).map((child, index) => logicView(child, expression?.children?.[index])));
-  children.append(...(logic.external || []).map(externalNotice), ...(logic.extensions || []).map(node => xmlElement(node)));
-  group.append(children);
-  return group;
+  condition.append(...(logic.external || []).map(externalNotice));
+  condition.append(...(logic.extensions || []).map(node => xmlElement(node)));
+  return condition;
 }
 function conditionCount(logic) { return logic ? (logic.label ? 1 : 0) + (logic.children || []).reduce((sum, child) => sum + conditionCount(child), 0) : 0; }
 function enabledBadge(rule) { return element("span", `badge ${rule.effectiveEnabled ? "enabled" : "disabled"}`, rule.effectiveEnabled ? "● Enabled" : rule.enabled ? "● Disabled by parent" : "● Disabled"); }
@@ -440,12 +441,12 @@ function exportedFields(node, omitted = []) {
   if (!fields.childNodes.length) fields.append(empty("No settings exported"));
   return fields;
 }
-function actionBlock(action, rule, raw) {
+function actionBlock(action, raw) {
   const block = element("div", "action-block");
   const heading = element("div", "action-heading");
   heading.append(element("h3", "action-title", action.label || "Unnamed action"));
   heading.append(metadata(action.label || "Unnamed action", { name: "ACTION", attributes: raw?.attributes, children: raw?.extensions }, { compact: true }));
-  if (action.disabled || !rule.effectiveEnabled) heading.append(element("span", "badge disabled", action.disabled ? "Disabled" : "Inactive"));
+  heading.append(element("span", `badge ${action.disabled ? "disabled" : "enabled"}`, action.disabled ? "Disabled" : "Enabled"));
   const content = element("div", "action-content");
   const parameters = element("dl", "action-parameters detail-fields");
   for (const parameter of action.parameters || []) {
@@ -534,7 +535,7 @@ function renderRule(detail) {
   const segmentHost = view.segments?.count ? element("div", "segment-overview") : null;
   if (segmentHost) scope.push(segmentHost);
   const sections = [scope.length ? section("scope", "Scope & Filters", "", scope) : absentSection("scope", "Scope & Filters")];
-  const logicContent = [...(rule.externalExpressions || []).map(externalNotice), conditionView(view.logic, rule.expression)];
+  const logicContent = [...(rule.externalExpressions || []).map(externalNotice), conditionView(view.logic, rule.expression, view.layout)];
   const count = conditionCount(view.logic);
   sections.push(section("main-rule", "Conditions", count ? `${count} condition${count === 1 ? "" : "s"}` : "", logicContent));
   const subrules = [];
@@ -545,14 +546,14 @@ function renderRule(detail) {
       heading.append(button(`${depth ? "↳ " : ""}${child.rule.name}`, "", () => { revealAncestors(`rule:${child.rule.id}`); selectNode(`rule:${child.rule.id}`); }), enabledBadge(child.rule));
       heading.append(policyIdentity(child.rule), metadata(child.rule.name, ruleMetadata(child.rule), { compact: true }));
       block.append(heading);
-      block.append(...(child.rule.externalExpressions || []).map(externalNotice), conditionView(child.logic, child.rule.expression));
+      block.append(...(child.rule.externalExpressions || []).map(externalNotice), conditionView(child.logic, child.rule.expression, child.layout));
       subrules.push(block);
       appendSubrules(child.children, depth + 1);
     }
   }
   appendSubrules(view.children, 0);
   if (subrules.length) sections.push(section("sub-rules", "Sub Rules", `${subrules.length} rules`, subrules, false));
-  const actionRows = (view.actions || []).map((action, index) => actionBlock(action, rule, rule.actions?.[index]));
+  const actionRows = (view.actions || []).map((action, index) => actionBlock(action, rule.actions?.[index]));
   sections.push(actionRows.length ? section("actions", "Actions", `${actionRows.length} action${actionRows.length === 1 ? "" : "s"}`, actionRows) : absentSection("actions", "Actions"));
   const timers = (rule.timers || []).filter(timer => !usesDefaultTiming(timer));
   if (timers.length) {
@@ -563,6 +564,19 @@ function renderRule(detail) {
   else if (rule.timers?.length) sections.push(absentSection("timers", "Timers & Admissions", "Using defaults"));
   const defaults = (rule.timers || []).filter(usesDefaultTiming);
   if (defaults.length) sections.find(node => node.dataset.section === "timers").querySelector("summary").append(metadata("Default timers and admissions", { name: "Default timing", children: defaults }));
+  if (rule.attributes?.length) {
+    const table = element("table", "raw-attributes");
+    const body = element("tbody");
+    for (const attribute of rule.attributes) {
+      const row = element("tr");
+      const name = element("th", "", attribute.namespace ? `{${attribute.namespace}}${attribute.name}` : attribute.name);
+      name.scope = "row";
+      row.append(name, element("td", "", shown(attribute.value)));
+      body.append(row);
+    }
+    table.append(body);
+    sections.push(section("attributes", "Attributes", `${rule.attributes.length} attribute${rule.attributes.length === 1 ? "" : "s"}`, [table]));
+  }
   $("details").replaceChildren(header, ...sections);
   if (segmentHost) segmentBrowser.mount(segmentHost, rule.id, view.segments);
   $("details").scrollTop = 0;
@@ -600,7 +614,11 @@ $("file-input").addEventListener("change", async event => {
 });
 $("search-form").addEventListener("submit", event => { event.preventDefault(); clearTimeout(searchTimer); refreshSearch(); });
 for (const id of Object.values(fields)) $(id).addEventListener("input", () => { if (id === "group-search") groupChoice = null; if (id === "action-search") populateActionValues(); clearTimeout(searchTimer); searchTimer = setTimeout(() => refreshSearch(), 140); });
-$("filter-toggle").addEventListener("click", () => { $("filter-panel").hidden = !$("filter-panel").hidden; $("filter-toggle").setAttribute("aria-expanded", String(!$("filter-panel").hidden)); if ($("filter-panel").hidden) groupPicker.close(); });
+$("filter-toggle").addEventListener("click", () => {
+  const open = $("filter-panel").hidden;
+  setFiltersOpen(open);
+  if (open) focusFilter("property-search");
+});
 $("clear-search").addEventListener("click", clearSearch); $("reset-search").addEventListener("click", clearSearch);
 $("previous-result").addEventListener("click", () => jumpResult(-1)); $("next-result").addEventListener("click", () => jumpResult(1));
 $("expand-all").addEventListener("click", () => { state.expanded = new Set(state.byKey.keys()); renderTree(); });
@@ -623,10 +641,16 @@ function focusDetails() {
   if (segmentBrowser.isOpen) { segmentBrowser.focus(); return; }
   (lastDetailFocus?.isConnected && $("details").contains(lastDetailFocus) ? lastDetailFocus : $("details")).focus({ preventScroll: true });
 }
+function setFiltersOpen(open) {
+  $("filter-panel").hidden = !open;
+  $("filter-toggle").setAttribute("aria-expanded", String(open));
+  if (!open) groupPicker.close();
+}
 function focusFilter(id) {
   segmentBrowser.close(false);
-  if (id !== "text-search") { $("filter-panel").hidden = false; $("filter-toggle").setAttribute("aria-expanded", "true"); }
+  setFiltersOpen(true);
   $(id).focus(); $(id).select();
+  $(id).scrollIntoView({ block: "nearest" });
 }
 document.addEventListener("focusin", event => { if ($("details").contains(event.target)) lastDetailFocus = event.target; });
 
@@ -635,15 +659,26 @@ document.addEventListener("keydown", event => {
   const target = document.activeElement;
   const editing = /INPUT|TEXTAREA|SELECT/.test(target?.tagName || "") || target?.isContentEditable;
   if (event.altKey && !event.ctrlKey && !event.metaKey) {
-    const filters = { g: "group-search", p: "property-search", a: "action-search", v: "action-value-search" };
     const key = event.key.toLowerCase();
-    if (filters[key]) { event.preventDefault(); focusFilter(filters[key]); return; }
     if (key === "h") { event.preventDefault(); segmentBrowser.close(false); groupPicker.close(); focusTree(); return; }
     if (key === "l") { event.preventDefault(); groupPicker.close(); focusDetails(); return; }
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") { event.preventDefault(); openPolicy(); return; }
   if (segmentBrowser.isOpen) return; // The modal inspector owns its navigation.
-  if (event.key === "Escape") { event.preventDefault(); groupPicker.close(); focusTree(); return; }
+  if (event.key === "Escape") { event.preventDefault(); setFiltersOpen(false); focusTree(); return; }
+  const filterFields = Object.values(fields);
+  const filterIndex = filterFields.indexOf(target?.id);
+  if (filterIndex >= 0) {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      focusFilter(filterFields[(filterIndex + (event.shiftKey ? filterFields.length - 1 : 1)) % filterFields.length]);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "r") { event.preventDefault(); clearSearch(); return; }
+    if (event.key === "Enter") {
+      event.preventDefault(); groupPicker.close(); clearTimeout(searchTimer); refreshSearch().then(focusTree); return;
+    }
+  }
   if (editing) return;
   const node = state.byKey.get(state.selectedKey);
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && !window.getSelection()?.toString() && node?.kind !== "folder") { event.preventDefault(); if (node) copyID(node.id); return; }
@@ -678,9 +713,9 @@ document.addEventListener("keydown", event => {
     const next = Math.max(0, Math.min(state.rows.length - 1, state.rows.indexOf(state.selectedKey) + delta));
     if (state.rows[next]) selectNode(state.rows[next], true); return;
   }
-  if (["h", "ArrowLeft", "l", "ArrowRight", "Enter"].includes(event.key) && node) {
+  if (["h", "l", "ArrowLeft", "ArrowRight", "Enter"].includes(event.key) && node) {
     event.preventDefault(); const children = state.children.get(node.key) || [];
-    if (event.key === "Enter") { toggleNode(node.key); return; }
+    if (event.key === "Enter") { focusDetails(); return; }
     if (["h", "ArrowLeft"].includes(event.key)) {
       if (state.expanded.has(node.key) && children.length) { state.expanded.delete(node.key); renderTree(); }
       else if (node.parent) selectNode(node.parent, true);
@@ -709,10 +744,11 @@ async function initializeUpdates() {
   if (!bridge.isDesktop()) { $("build-info").textContent = "Browser preview · dev"; return; }
   try {
     const info = await bridge.buildInfo();
-    $("build-info").textContent = info.enabled ? `Build ${info.version} · update advice: ${info.repository}` : `Build ${info.version} · update checks disabled`;
+    $("build-info").textContent = info.enabled ? `Version ${info.version} · checking GitHub releases` : `Version ${info.version} · update checks disabled`;
     const release = await bridge.checkUpdate();
+    if (info.enabled) $("build-info").textContent = `Version ${info.version} · GitHub release notifications enabled`;
     if (!release) return;
-    $("update-message").textContent = `Polisee ${release.version} is available; configured build ${info.version}.`;
+    $("update-message").textContent = `Polisee ${release.version} is available. You’re running ${info.version}.`;
     $("update-banner").hidden = false;
     $("update-release").addEventListener("click", async () => { try { await bridge.openRelease(release.url); } catch (cause) { error(cause); } });
     $("update-dismiss").addEventListener("click", async () => {

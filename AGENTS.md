@@ -1,5 +1,7 @@
 # Repository guidance
 
+- The optional parent [workspace map](../AGENTS.md) describes sibling projects
+  and shared data. Consult it for work spanning projects.
 - This is Polisee GUI using Wails and the sibling polisee-lib Go
   module. Keep policy parsing, domain interpretation, and query matching in the
   library. The frontend renders values and owns navigation/display state.
