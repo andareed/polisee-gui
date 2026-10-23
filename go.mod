@@ -3,7 +3,7 @@ module github.com/andareed/polisee-gui
 go 1.25.0
 
 require (
-	github.com/andareed/polisee-lib v0.0.0
+	github.com/andareed/polisee-lib v0.1.0
 	github.com/wailsapp/wails/v2 v2.16.0
 )
 

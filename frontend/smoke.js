@@ -113,7 +113,15 @@ export async function verifyDetails() {
   assert(find("scope").textContent.includes("Office devices") && find("scope").textContent.includes("192.0.2.0/24"), "Readable scope values were lost");
   assert(!find("scope").textContent.includes("GROUP_IN_FILTER") && find("scope").querySelector(".inline-identifier")?.textContent.includes("staff"), "Scope IDs are not visible as secondary information");
   assert(!find("sub-rules").open, "Sub-rule previews crowd the initial view");
-  assert(find("scope").getBoundingClientRect().height <= 120, "Three scope values take more than a compact section");
+  const scope = find("scope");
+  const scopeStyle = getComputedStyle(scope);
+  // Compactness describes the contents; the shared panel adds two border pixels.
+  const scopeHeight = scope.getBoundingClientRect().height -
+    parseFloat(scopeStyle.borderTopWidth) - parseFloat(scopeStyle.borderBottomWidth);
+  const scopeRows = [...scope.querySelectorAll(".setting-item")];
+  assert(scopeRows.length === 3 && scopeRows.every(row => row.getBoundingClientRect().height <= 26),
+    "Scope values no longer occupy compact single rows");
+  assert(scopeHeight <= 120, "Three scope values take more than a compact content box: " + scopeHeight + "px");
   const action = find("actions").querySelector(".action-block");
   const parameter = action.querySelector(".detail-fact");
   assert(action.querySelector(".action-title")?.textContent === "Send notification", "Action title is not readable");
