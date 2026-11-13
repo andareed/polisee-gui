@@ -13,10 +13,11 @@ test("zoom is bounded and stored levels normalize safely", () => {
 test("buttons, keyboard and wheel share application zoom and ordered persistence", async () => {
   const makeTarget = () => ({ textContent: "", attrs: {}, events: {}, addEventListener(type, callback) { this.events[type] = callback; }, setAttribute(name, value) { this.attrs[name] = value; } });
   const targets = Object.fromEntries(["zoom-in", "zoom-out", "zoom-level"].map(id => [id, makeTarget()]));
-  const windowRef = makeTarget(), documentRef = { getElementById: id => targets[id], documentElement: { style: {} } };
+  const windowRef = { ...makeTarget(), innerHeight: 900 }, documentRef = { getElementById: id => targets[id], documentElement: { style: { setProperty(name, value) { this[name] = value; } } } };
   const saved = [];
   initZoom({ documentRef, windowRef, initial: 1.25, save: async value => saved.push(value) });
   assert.equal(documentRef.documentElement.style.zoom, "1.25");
+  assert.equal(documentRef.documentElement.style["--app-height"], "720px");
   targets["zoom-in"].events.click();
   let prevented = 0;
   const event = { ctrlKey: true, preventDefault() { prevented++; } };
@@ -30,4 +31,7 @@ test("buttons, keyboard and wheel share application zoom and ordered persistence
   assert.equal(targets["zoom-level"].textContent, "110%");
   targets["zoom-level"].events.click();
   assert.equal(documentRef.documentElement.style.zoom, "1");
+  windowRef.innerHeight = 600;
+  windowRef.events.resize();
+  assert.equal(documentRef.documentElement.style["--app-height"], "600px");
 });

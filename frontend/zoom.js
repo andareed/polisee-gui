@@ -10,7 +10,8 @@ export function initZoom({ documentRef = document, windowRef = window, initial =
   const out = documentRef.getElementById("zoom-out"), label = documentRef.getElementById("zoom-level"), into = documentRef.getElementById("zoom-in");
   let current = normalizeZoom(initial), queue = Promise.resolve();
   function paint() {
-    // Viewport units already account for page zoom; keep the shell at 100vh.
+    // Use the measured viewport: WebKit applies CSS zoom to viewport units.
+    documentRef.documentElement.style.setProperty("--app-height", `${windowRef.innerHeight / current}px`);
     documentRef.documentElement.style.zoom = String(current);
     label.textContent = `${Math.round(current * 100)}%`;
     label.setAttribute("aria-label", `Reset zoom to 100%; current zoom ${Math.round(current * 100)}%`);
@@ -22,6 +23,7 @@ export function initZoom({ documentRef = document, windowRef = window, initial =
     queue = queue.then(() => save(snapshot)).catch(onError);
   }
   paint();
+  windowRef.addEventListener("resize", paint);
   out.addEventListener("click", () => apply(nextZoom(current, -1)));
   into.addEventListener("click", () => apply(nextZoom(current, 1)));
   label.addEventListener("click", () => apply(1));
