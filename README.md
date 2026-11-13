@@ -31,12 +31,15 @@ The launcher runs an incremental build before opening
 `bin/polisee-gui`, so embedded frontend and library changes are included
 even when an older binary exists. `./run.sh build` builds without opening it. It
 loads an embedded fabricated policy export on startup. Choose **Open policy**
-for a local XML export. Exports are read locally and are never modified or
-uploaded. Native startup reopening is opt-in
+for a local XML export. Source files are read locally and never modified or
+uploaded. Select a main policy and choose **Export policy** (Ctrl/Cmd+E) to save
+its complete XML, including every subrule, using EyeSight’s `RULES` format.
+The desktop opens a save dialog; the browser preview downloads the XML.
+Single-policy exports can be reopened in Polisee. Native startup reopening is opt-in
 using **Reopen this policy on startup**. The application
 accepts UTF-8 exports up to 64 MiB.
 
-The module pins `github.com/andareed/polisee-lib v0.1.0` and uses a local
+The module pins `github.com/andareed/polisee-lib v0.2.0` and uses a local
 `replace` to build against the adjacent library checkout. You need access to
 that private source for development. Downloadable releases include the compiled
 engine and do not need a library checkout. Dependencies are pinned in

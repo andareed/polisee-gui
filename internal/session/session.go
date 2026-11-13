@@ -21,13 +21,14 @@ type State struct {
 }
 
 type Session struct {
-	mu         sync.Mutex
-	store      *settings.Store
-	service    *viewer.Service
-	document   viewer.Document
-	path       string
-	selectedID string
-	generation uint64
+	mu                sync.Mutex
+	store             *settings.Store
+	service           *viewer.Service
+	document          viewer.Document
+	path              string
+	selectedID        string
+	generation        uint64
+	serviceGeneration uint64
 }
 
 func New(store *settings.Store) *Session { return &Session{store: store, service: viewer.New()} }
@@ -40,6 +41,7 @@ func (s *Session) state(warning string) State {
 
 func (s *Session) install(candidate *viewer.Service, document viewer.Document, path, selected string) {
 	s.generation++
+	s.serviceGeneration = document.Generation
 	document.Generation = s.generation
 	s.service, s.document, s.path = candidate, document, path
 	s.selectedID = document.InitialID

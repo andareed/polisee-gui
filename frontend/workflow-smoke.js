@@ -1,3 +1,5 @@
+import { bridge } from "./bridge.js";
+
 // Fabricated data only. Imported by the native smoke check and local visual QA.
 export function browseFixture(segments = 24, ranges = 1200) {
   const parts = ['<POLICY_FOLDER ID="f" NAME="Fabricated policies"><RULE ID="bulk" NAME="Segment browsing" DESCRIPTION="Fabricated policy for large range collections.">',
@@ -43,6 +45,25 @@ export async function verifyWorkflow(restoreDemo) {
     <POLICY><RULE ID="tenth" NAME="1.1.10 Extended discovery"/></POLICY>
     <POLICY><RULE ID="first" NAME="1.1.01 Network discovery"/></POLICY>
   </POLICIES></POLICY_FOLDER>`, "1.1.02 Device discovery");
+  assert(!$("export-policy").disabled, "Main policy export action is disabled");
+  const originalExport = bridge.exportPolicy;
+  const calls = [];
+  bridge.exportPolicy = async (generation, id) => { calls.push({ generation, id }); return "synthetic.xml"; };
+  try {
+    $("export-policy").click();
+    await until(() => calls.length === 1 && !$("export-policy").disabled, "Export button did not finish");
+    document.querySelector('#tree [data-key="rule:second"]').focus();
+    key("e", { ctrlKey: true });
+    await until(() => calls.length === 2 && !$("export-policy").disabled, "Export shortcut failed");
+    assert(calls.every(call => call.id === "second" && call.generation > 0), "Export targeted a different policy");
+    await policy("z", "Z step");
+    assert($("export-policy").disabled, "Subrule export should be unavailable");
+    key("e", { ctrlKey: true });
+    assert(calls.length === 2, "Subrule shortcut exported a policy");
+    document.querySelector('#tree [data-key="folder:ordering"]').click();
+    assert($("export-policy").disabled, "Folder export should be unavailable");
+    await policy("second", "1.1.02 Device discovery");
+  } finally { bridge.exportPolicy = originalExport; }
   const policyOrder = () => [...$("tree").querySelectorAll('.tree-row[data-key^="rule:"]')].map(row => row.dataset.key).join(",");
   assert(policyOrder() === "rule:first,rule:second,rule:z,rule:a,rule:tenth", "Policy names are not in numeric order or subrule order changed");
   input($("text-search"), "discovery");

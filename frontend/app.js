@@ -214,11 +214,29 @@ function togglePin(id) {
   status(state.pins.has(id) ? "Policy pinned" : "Policy unpinned");
 }
 
+let exporting = false;
+async function exportPolicy() {
+  const node = state.byKey.get(state.selectedKey);
+  if (exporting || node?.kind !== "policy" || $("export-policy").disabled) return;
+  exporting = true;
+  $("export-policy").disabled = true;
+  try {
+    const path = await bridge.exportPolicy(state.document.generation, node.id);
+    if (path) status(`Exported ${node.name}`);
+  } catch (cause) { error(cause); }
+  finally {
+    exporting = false;
+    $("export-policy").disabled = state.byKey.get(state.selectedKey)?.kind !== "policy";
+  }
+}
+$("export-policy").addEventListener("click", exportPolicy);
+
 async function selectNode(key, focus = false) {
   const node = state.byKey.get(key);
   if (!node) return;
   closeMetadata(false);
   state.selectedKey = key;
+  $("export-policy").disabled = node.kind !== "policy" || exporting;
   segmentBrowser.unmount();
   latestDetail = null;
   const request = ++state.detailRequest;
@@ -593,7 +611,7 @@ function renderFolder(node) {
   $("breadcrumb").replaceChildren(element("span", "", "Policy folder"));
   $("details").replaceChildren(header, section("contents", "Contents", `${contents.length} items`, contents.length ? contents : [empty("This folder is empty.")]));
 }
-function renderEmpty(message) { segmentBrowser.unmount(); latestDetail = null; state.detailRequest++; $("breadcrumb").replaceChildren(); $("details").replaceChildren(element("div", "empty-detail", message)); }
+function renderEmpty(message) { $("export-policy").disabled = true; segmentBrowser.unmount(); latestDetail = null; state.detailRequest++; $("breadcrumb").replaceChildren(); $("details").replaceChildren(element("div", "empty-detail", message)); }
 async function copyID(id) { try { await bridge.copy(id); status("Policy ID copied"); } catch (cause) { error(cause); } }
 function clearSearch() { groupChoice = null; groupPicker.close(); for (const id of Object.values(fields)) $(id).value = ""; populateActionValues(); clearTimeout(searchTimer); refreshSearch(false); }
 function jumpResult(delta) {
@@ -681,6 +699,7 @@ document.addEventListener("keydown", event => {
   }
   if (editing) return;
   const node = state.byKey.get(state.selectedKey);
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "e") { event.preventDefault(); exportPolicy(); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && !window.getSelection()?.toString() && node?.kind !== "folder") { event.preventDefault(); if (node) copyID(node.id); return; }
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   if (event.key === "/") { event.preventDefault(); focusFilter("text-search"); return; }

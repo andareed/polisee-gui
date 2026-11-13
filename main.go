@@ -22,7 +22,7 @@ import (
 )
 
 // Default application version for the Go GUI; the frontend reads it through BuildInfo.
-var buildVersion = "0.2.2"
+var buildVersion = "0.2.3"
 var updateRepository = updates.Repository
 
 type App struct {
@@ -103,6 +103,20 @@ func (a *App) Ready() {
 	}
 }
 func (a *App) CopyText(text string) error { return runtime.ClipboardSetText(a.ctx, text) }
+func (a *App) ExportPolicy(generation uint64, id string) (string, error) {
+	export, err := a.session.ExportPolicy(generation, id)
+	if err != nil {
+		return "", err
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{Title: "Export selected policy", DefaultFilename: export.Filename, Filters: []runtime.FileFilter{{DisplayName: "Policy XML", Pattern: "*.xml"}}})
+	if err != nil || path == "" {
+		return "", err
+	}
+	if err := a.session.SavePolicy(generation, id, path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
 func (a *App) OpenPolicy() (*session.State, error) {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{Title: "Open policy XML", Filters: []runtime.FileFilter{{DisplayName: "Policy XML", Pattern: "*.xml"}}})
 	if err != nil || path == "" {

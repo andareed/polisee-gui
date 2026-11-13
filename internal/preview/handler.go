@@ -14,6 +14,18 @@ import (
 
 func Handler(service *viewer.Service) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/export", func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Generation uint64 `json:"generation"`
+			ID         string `json:"id"`
+		}
+		if err := decode(w, r, &request); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		result, err := service.ExportPolicy(request.Generation, request.ID)
+		respond(w, result, err)
+	})
 	mux.HandleFunc("POST /api/demo", func(w http.ResponseWriter, r *http.Request) {
 		result, err := service.LoadDemo()
 		respond(w, result, err)

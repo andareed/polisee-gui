@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/andareed/polisee-gui/internal/viewer"
+	"github.com/andareed/polisee-lib"
 )
 
 func TestPreviewUsesTheDesktopService(t *testing.T) {
@@ -30,6 +32,34 @@ func TestPreviewUsesTheDesktopService(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
 	if response.Code != 200 || !strings.Contains(response.Body.String(), "Policy tree") {
 		t.Fatal("frontend not served")
+	}
+}
+
+func TestPreviewExportsOnlySelectedMainPolicy(t *testing.T) {
+	service := viewer.New()
+	if _, err := service.LoadDemo(); err != nil {
+		t.Fatal(err)
+	}
+	handler := Handler(service)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/export", strings.NewReader(`{"generation":1,"id":"office"}`)))
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
+	}
+	var export viewer.PolicyExport
+	if err := json.Unmarshal(response.Body.Bytes(), &export); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := polisee.Parse(context.Background(), strings.NewReader(export.XML), export.Filename)
+	if err != nil || len(catalog.Policies) != 1 || catalog.Policies[0].ID != "office" || len(catalog.Policies[0].Rules) != 3 {
+		t.Fatal("incomplete export", err)
+	}
+	for _, body := range []string{`{"generation":1,"id":"child"}`, `{"generation":0,"id":"office"}`, `{"generation":1,"id":"missing"}`, `{"generation":1,"id":"office","path":"forbidden.xml"}`} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/export", strings.NewReader(body)))
+		if response.Code != http.StatusBadRequest {
+			t.Fatal("invalid export request accepted", body)
+		}
 	}
 }
 

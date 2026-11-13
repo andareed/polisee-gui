@@ -26,6 +26,16 @@ export const bridge = {
   rule: (id) => native() ? native().GetRule(id) : request("rule", { id }),
   segments: query => native() ? native().Segments(query) : request("segments", query),
   ranges: query => native() ? native().Ranges(query) : request("ranges", query),
+  exportPolicy: async (generation, id) => {
+    if (native()) return native().ExportPolicy(generation, id);
+    const result = await request("export", { generation, id });
+    const url = URL.createObjectURL(new Blob([result.xml], { type: "application/xml" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = result.filename;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return result.filename;
+  },
   open: () => native().OpenPolicy(),
   import: (name, text) => native() ? native().ImportXML(name, text) : request("import", { name, text }),
   copy: (text) => native() ? native().CopyText(text) : navigator.clipboard.writeText(text),

@@ -40,7 +40,7 @@
         <div class="sidebar-foot"><span class="status-dot"></span><span id="source-status">Local policy definitions</span></div>
       </aside>
       <section class="detail-panel" aria-label="Policy details">
-        <div class="detail-toolbar"><span class="active-tab">Policy details</span><div class="detail-tools"><div class="condition-view-switch" role="group" aria-label="Condition display"><button data-condition-view="visual" aria-pressed="true" class="quiet small">Visual</button><button data-condition-view="text" aria-pressed="false" class="quiet small">Text</button></div><button id="diagnostics-toggle" data-diagnostics-toggle aria-pressed="true" class="quiet small" title="Show or hide exported fields beside their elements">Diagnostics</button><button id="collapse-sections" class="quiet small">Collapse all</button><button id="expand-sections" class="quiet small">Expand all</button></div></div>
+        <div class="detail-toolbar"><span class="active-tab">Policy details</span><div class="detail-tools"><button id="export-policy" class="quiet small" disabled title="Select a main policy to export its complete XML (Ctrl/Cmd+E)">Export policy</button><div class="condition-view-switch" role="group" aria-label="Condition display"><button data-condition-view="visual" aria-pressed="true" class="quiet small">Visual</button><button data-condition-view="text" aria-pressed="false" class="quiet small">Text</button></div><button id="diagnostics-toggle" data-diagnostics-toggle aria-pressed="true" class="quiet small" title="Show or hide exported fields beside their elements">Diagnostics</button><button id="collapse-sections" class="quiet small">Collapse all</button><button id="expand-sections" class="quiet small">Expand all</button></div></div>
         <nav id="breadcrumb" class="breadcrumb" aria-label="Policy breadcrumb"></nav>
         <div id="details" class="details" tabindex="0" role="region" aria-label="Policy contents" aria-keyshortcuts="Alt+L" aria-live="polite"><div class="empty-detail">Select a policy to inspect its definition.</div></div>
       </section>
@@ -60,6 +60,7 @@
     <dt>[ / ]</dt><dd>Previous / next detail section</dd>
     <dt>Page Up / Down</dt><dd>Scroll the focused pane; Home / End go to its start / end</dd>
     <dt>n / Shift+N</dt><dd>Next / previous matching policy</dd>
+    <dt>Ctrl/Cmd+E</dt><dd>Export the selected main policy and all its subrules</dd>
     <dt>p</dt><dd>Pin / unpin the selected policy</dd>
     <dt>Ctrl/Cmd+C</dt><dd>Copy selected text, or the policy ID outside inputs</dd>
     <dt>Ctrl/Cmd+O</dt><dd>Open a policy export</dd>
